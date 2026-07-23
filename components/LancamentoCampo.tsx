@@ -87,7 +87,7 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
     // Treatments
     Im_Trat: 0,
     Dep_Trat: 0, // Depósitos Tratados (Coluna U)
-    Larvicida: 0, // Larvicida(g)
+    Larvicida: '', // Larvicida(g)
 
     // Deposit Types
     A1: 0,
@@ -128,14 +128,33 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
     }));
   };
 
+  const parseLarvicidaVal = (val: any): number => {
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    if (!val) return 0;
+    const str = String(val).replace(',', '.').trim();
+    const parsed = parseFloat(str);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const handleNumberChange = (field: string, value: string) => {
     const num = parseInt(value) || 0;
     handleInputChange(field, Math.max(0, num));
   };
 
   const handleFloatChange = (field: string, value: string) => {
-    const num = parseFloat(value.replace(',', '.')) || 0;
-    handleInputChange(field, Math.max(0, num));
+    let cleaned = value.replace(/[^0-9.,]/g, '');
+    const matches = cleaned.match(/[.,]/g);
+    if (matches && matches.length > 1) {
+      let firstSepIndex = -1;
+      cleaned = cleaned.replace(/[.,]/g, (match, offset) => {
+        if (firstSepIndex === -1) {
+          firstSepIndex = offset;
+          return match;
+        }
+        return '';
+      });
+    }
+    handleInputChange(field, cleaned);
   };
 
   const handleClearAll = () => {
@@ -162,6 +181,7 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
 
     const rowData = {
       ...form,
+      Larvicida: parseLarvicidaVal(form.Larvicida),
       Total_Imoveis: totalImoveis,
       Total_Depositos: totalDepositos,
       // Create readable reverse date (DD/MM/YYYY)
@@ -201,7 +221,7 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
       Total_T: 0,
       R: 0, Comercio: 0, Tb: 0, PE: 0, O: 0,
       Fechado: 0, Recusa: 0, Resgate: 0,
-      Im_Trat: 0, Dep_Trat: 0, Larvicida: 0,
+      Im_Trat: 0, Dep_Trat: 0, Larvicida: '',
       A1: 0, A2: 0, B: 0, C: 0, D1: 0, D2: 0, E: 0,
       Dep_Elim: 0, Amostras: 0,
       Observacao: ''
@@ -210,7 +230,14 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
 
   // Edit a row from the list
   const handleEditRow = (index: number) => {
-    setForm({ ...localRows[index] });
+    const row = localRows[index];
+    const larvStr = row.Larvicida !== undefined && row.Larvicida !== null 
+      ? String(row.Larvicida).replace('.', ',') 
+      : '';
+    setForm({ 
+      ...row,
+      Larvicida: larvStr
+    });
     setEditingIndex(index);
     showStatus('success', 'Dados do registro carregados no formulário para edição.');
   };
@@ -324,7 +351,7 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
           Number(entry.Resgate) || 0,                                    // Coluna S: Resgate
           Number(entry.Im_Trat) || 0,                                    // Coluna T: Im_Trat
           Number(entry.Dep_Trat) || 0,                                   // Coluna U: Dep_Trat
-          Number(entry.Larvicida) || 0,                                  // Coluna V: Larvicida
+          parseLarvicidaVal(entry.Larvicida),                            // Coluna V: Larvicida
           Number(entry.A1) || 0,                                         // Coluna W: A1
           Number(entry.A2) || 0,                                         // Coluna X: A2
           Number(entry.B) || 0,                                          // Coluna Y: B
@@ -890,9 +917,10 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
                 <span className="text-[9px] font-semibold text-teal-100 block truncate">Larvicida (g)</span>
                 <input
                   type="text"
+                  inputMode="decimal"
                   className="w-full bg-white text-slate-800 rounded p-1.5 text-xs font-bold text-center"
-                  value={form.Larvicida || ''}
-                  placeholder="0.0"
+                  value={form.Larvicida !== undefined && form.Larvicida !== null ? form.Larvicida : ''}
+                  placeholder="0,0"
                   onChange={(e) => handleFloatChange('Larvicida', e.target.value)}
                 />
               </div>
@@ -1072,7 +1100,7 @@ export const LancamentoCampo: React.FC<LancamentoCampoProps> = ({
                   <td className="p-2.5 text-center text-teal-300">{row.Resgate}</td>
                   <td className="p-2.5 text-center text-emerald-300 font-bold">{row.Im_Trat}</td>
                   <td className="p-2.5 text-center text-emerald-200">{row.Dep_Trat}</td>
-                  <td className="p-2.5 text-center font-mono">{row.Larvicida}g</td>
+                  <td className="p-2.5 text-center font-mono">{String(row.Larvicida ?? 0).replace('.', ',')}g</td>
                   <td className="p-2.5 text-center font-bold text-cyan-200">{row.Quart_C || '0'}</td>
                   <td className="p-2.5 text-center bg-teal-950/20">
                     <div className="flex items-center justify-center gap-1">

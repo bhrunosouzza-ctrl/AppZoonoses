@@ -163,7 +163,12 @@ export const processDataFile = (file: File): Promise<ProductionData[]> => {
 
         const processed = data.map((row: any) => {
             const { mes, dataFormatada } = parseExcelDate(row.Data);
-            const n = (val: any) => Number(val) || 0;
+            const n = (val: any) => {
+              if (typeof val === 'number') return isNaN(val) ? 0 : val;
+              if (!val) return 0;
+              const parsed = parseFloat(String(val).replace(',', '.'));
+              return isNaN(parsed) ? 0 : parsed;
+            };
 
             return {
                 ...row,
