@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { DashboardAnalytics, ProductionData, FilterState } from '../types';
+import { DashboardAnalytics, ProductionData, FilterState, GoalSettings } from '../types';
 
 export const generatePDFReport = (
     analytics: DashboardAnalytics, 
@@ -347,5 +347,365 @@ export const generatePDFReport = (
         ? `Relatorio_Producao_${filters.agente.replace(/\s+/g, '_')}_${now.toISOString().split('T')[0]}.pdf`
         : `Relatorio_Producao_Equipe_${now.toISOString().split('T')[0]}.pdf`;
         
+    doc.save(fileName);
+};
+
+export const generateProductivityAndNeighborhoodsPDFReport = (
+    analytics: DashboardAnalytics, 
+    filters: FilterState,
+    filteredData: ProductionData[],
+    goals: GoalSettings
+) => {
+    // Standard A4 landscape page layout (297mm x 210mm)
+    const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+    });
+
+    const now = new Date();
+    const nowStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    const width = doc.internal.pageSize.getWidth(); // 297mm
+    const height = doc.internal.pageSize.getHeight(); // 210mm
+    const printableWidth = width - 28; // 269mm
+
+    // Helper: Format ISO date string into Excel style DD-Mês-YY
+    const formatDailyDate = (dateISO: string) => {
+        if (!dateISO) return '-';
+        const months = ['Jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+        const parts = dateISO.split('-');
+        if (parts.length !== 3) return dateISO;
+        const year = parts[0].slice(2);
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const day = parts[2];
+        const monthStr = months[monthIdx] || '';
+        return `${day}-${monthStr}-${year}`;
+    };
+
+    // Decorate page headers and footers
+    const setupPageDecorations = (pdfDoc: jsPDF, pageNumber: number) => {
+        const w = pdfDoc.internal.pageSize.getWidth();
+        const h = pdfDoc.internal.pageSize.getHeight();
+
+        // Top accent bar in emerald green
+        pdfDoc.setFillColor(13, 148, 136); // teal-600 / emerald tone
+        pdfDoc.rect(0, 0, w, 4, 'F');
+
+        // Footer separator line
+        const footerY = h - 15;
+        const footerTextY = h - 10;
+
+        pdfDoc.setDrawColor(226, 232, 240);
+        pdfDoc.setLineWidth(0.2);
+        pdfDoc.line(14, footerY, w - 14, footerY);
+
+        // Footer text
+        pdfDoc.setFont('helvetica', 'italic');
+        pdfDoc.setFontSize(8);
+        pdfDoc.setTextColor(148, 163, 184);
+        pdfDoc.text('Painel de Endemias - Ranking de Produtividade & Monitoramento de Bairros', 14, footerTextY);
+        pdfDoc.text(`Página ${pageNumber}`, w - 14, footerTextY, { align: 'right' });
+    };
+
+    // Decorate page 1
+    setupPageDecorations(doc, 1);
+
+    // --- Main Header ---
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text('RELATÓRIO DE RANKING DE PRODUTIVIDADE E MONITORAMENTO DE BAIRROS', 14, 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Programa Municipal de Controle de Endemias - Timóteo/MG | Documento emitido em ${nowStr}`, 14, 20);
+
+    // --- Active Filters Box ---
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.25);
+    doc.rect(14, 23.5, printableWidth, 17.5, 'DF');
+
+    const cycleVal = filters.ciclo === 'Todos' ? 'Todos os Ciclos' : filters.ciclo;
+    const supervisorVal = filters.supervisor === 'Todos' ? 'Todos os Supervisores' : filters.supervisor;
+    const agentVal = filters.agente === 'Todos' ? 'Todos os Agentes' : filters.agente;
+    const activityVal = filters.atividade && filters.atividade !== 'Todos' ? filters.atividade : 'Todas as Atividades';
+    const yearVal = filters.ano === 'Todos' ? 'Todos os Anos' : filters.ano;
+    const monthVal = filters.mes === 'Todos' ? 'Todos os Meses' : filters.mes;
+
+    const dates = filteredData.map(d => d.DataISO).filter(Boolean).sort();
+    const periodoVal = dates.length > 0 ? `${formatDailyDate(dates[0])} a ${formatDailyDate(dates[dates.length - 1])}` : 'Todos os registros';
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text('Parâmetros e Filtros Aplicados:', 17, 28);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Ciclo: ${cycleVal} | Atividade: ${activityVal} | Supervisor: ${supervisorVal} | Agente: ${agentVal}`, 17, 33);
+    doc.text(`Ano: ${yearVal} | Mês: ${monthVal} | Período de Atuação: ${periodoVal}`, 17, 37.5);
+
+    // --- High-Level KPI Summary Cards (6 cards) ---
+    const cellW = printableWidth / 6;
+    const totalAgentsCount = analytics.rankingAgentes.length;
+    const mediaPorAgente = totalAgentsCount > 0 ? (analytics.totalTrabalhados / totalAgentsCount).toFixed(0) : '0';
+    const totalBairrosAtendidos = analytics.neighborhoods.filter(n => n.visited > 0).length;
+
+    const kpiMetrics = [
+        { label: 'Imóveis Trab. (T)', value: analytics.totalTrabalhados.toLocaleString() },
+        { label: 'Agentes Avaliados', value: totalAgentsCount.toLocaleString() },
+        { label: 'Média / Agente', value: `${mediaPorAgente} imóv.` },
+        { label: 'Média Diária', value: `${analytics.mediaDiaria}/dia` },
+        { label: 'Bairros Trabalhados', value: `${totalBairrosAtendidos} de ${analytics.neighborhoods.length}` },
+        { label: 'Imóveis Tratados', value: analytics.totalImTrat.toLocaleString() }
+    ];
+
+    kpiMetrics.forEach((m, i) => {
+        const x = 14 + i * cellW;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(x, 44, cellW, 16, 'DF');
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(m.label, x + cellW / 2, 49, { align: 'center' });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(15, 23, 42);
+        doc.text(m.value, x + cellW / 2, 56, { align: 'center' });
+    });
+
+    // --- SECTION 1: RANKING DE PRODUTIVIDADE DOS AGENTES DE CAMPO ---
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text('1. RANKING DE PRODUTIVIDADE DOS AGENTES DE CAMPO', 14, 66);
+
+    const agentRankingRows = analytics.rankingAgentes.map((agent, idx) => {
+        const percMeta = goals.trabalhados > 0 ? ((agent.Trabalhados / goals.trabalhados) * 100).toFixed(0) : '0';
+        const metaStatus = agent.StatusMeta ? `Sim (${percMeta}%)` : `Não (${percMeta}%)`;
+        
+        return [
+            `#${idx + 1}`,
+            agent.name,
+            agent.Supervisor,
+            agent.Trabalhados.toLocaleString(),
+            agent.MediaDiaria || '0.0',
+            String(agent.Dias.size),
+            agent.Fechados.toLocaleString(),
+            agent.Recusas.toLocaleString(),
+            agent.Resgates.toLocaleString(),
+            agent.Im_Trat.toLocaleString(),
+            metaStatus
+        ];
+    });
+
+    // Calculate totals for agent ranking footer
+    const totalFechadosRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Fechados || 0), 0);
+    const totalRecusasRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Recusas || 0), 0);
+    const totalResgatesRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Resgates || 0), 0);
+    const totalImTratRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Im_Trat || 0), 0);
+    const agentsMetGoalCount = analytics.rankingAgentes.filter(a => a.StatusMeta).length;
+
+    const agentFooterRow = [
+        'TOTAL',
+        `${analytics.rankingAgentes.length} Agentes`,
+        `${analytics.rankingSupervisores.length} Equipes`,
+        analytics.totalTrabalhados.toLocaleString(),
+        analytics.mediaDiaria,
+        '-',
+        totalFechadosRank.toLocaleString(),
+        totalRecusasRank.toLocaleString(),
+        totalResgatesRank.toLocaleString(),
+        totalImTratRank.toLocaleString(),
+        `${agentsMetGoalCount}/${analytics.rankingAgentes.length} atingiram meta`
+    ];
+
+    autoTable(doc, {
+        startY: 69,
+        head: [['Pos', 'Agente de Campo', 'Supervisor', 'Trabalhados (T)', 'Média/Dia', 'Dias', 'Fechados', 'Recusas', 'Resgates', 'Tratados', 'Meta Atingida']],
+        body: agentRankingRows,
+        foot: [agentFooterRow],
+        theme: 'striped',
+        headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        styles: { fontSize: 7.5, cellPadding: 2.2, textColor: [31, 41, 55], valign: 'middle' },
+        columnStyles: {
+            0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+            1: { cellWidth: 46, halign: 'left', fontStyle: 'bold' },
+            2: { cellWidth: 38, halign: 'left' },
+            3: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
+            4: { cellWidth: 20, halign: 'center' },
+            5: { cellWidth: 16, halign: 'center' },
+            6: { cellWidth: 20, halign: 'center' },
+            7: { cellWidth: 18, halign: 'center' },
+            8: { cellWidth: 20, halign: 'center' },
+            9: { cellWidth: 20, halign: 'center' },
+            10: { cellWidth: 33, halign: 'center', fontStyle: 'bold' }
+        },
+        margin: { left: 14, right: 14, top: 16, bottom: 20 },
+        didDrawPage: function(data) {
+            setupPageDecorations(doc, data.pageNumber);
+            if (data.pageNumber > 1) {
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor(15, 23, 42);
+                doc.text('1. RANKING DE PRODUTIVIDADE DOS AGENTES (CONTINUAÇÃO)', 14, 11);
+            }
+        }
+    });
+
+    // --- SECTION 2: CONSOLIDAÇÃO POR EQUIPE DE SUPERVISÃO ---
+    let currentY = (doc as any).lastAutoTable.finalY + 8;
+    if (currentY + 45 > height - 20) {
+        doc.addPage();
+        currentY = 16;
+        setupPageDecorations(doc, doc.getNumberOfPages());
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text('2. CONSOLIDAÇÃO DE DESEMPENHO POR EQUIPE DE SUPERVISÃO', 14, currentY);
+
+    const supervisorRows = analytics.rankingSupervisores.map((sup, idx) => {
+        const participacao = analytics.totalTrabalhados > 0 
+            ? ((sup.Trabalhados / analytics.totalTrabalhados) * 100).toFixed(1) 
+            : '0.0';
+        return [
+            `#${idx + 1}`,
+            sup.name,
+            String(sup.Agentes.size),
+            sup.Trabalhados.toLocaleString(),
+            `${sup.MediaPorAgente || '0'} imóv.`,
+            `${participacao}%`
+        ];
+    });
+
+    autoTable(doc, {
+        startY: currentY + 3,
+        head: [['#', 'Supervisor Responsável', 'Nº de Agentes', 'Total Trabalhado da Equipe (T)', 'Média de Produção / Agente', 'Participação no Total']],
+        body: supervisorRows,
+        theme: 'striped',
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        styles: { fontSize: 8, cellPadding: 2.5, textColor: [31, 41, 55], valign: 'middle' },
+        columnStyles: {
+            0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+            1: { cellWidth: 70, halign: 'left', fontStyle: 'bold' },
+            2: { cellWidth: 32, halign: 'center' },
+            3: { cellWidth: 50, halign: 'center', fontStyle: 'bold' },
+            4: { cellWidth: 55, halign: 'center' },
+            5: { cellWidth: 48, halign: 'center', fontStyle: 'bold' }
+        },
+        margin: { left: 14, right: 14, top: 16, bottom: 20 },
+        didDrawPage: function(data) {
+            setupPageDecorations(doc, data.pageNumber);
+        }
+    });
+
+    // --- SECTION 3: MONITORAMENTO E COBERTURA DE BAIRROS ---
+    let neighborhoodStartY = (doc as any).lastAutoTable.finalY + 8;
+    if (neighborhoodStartY + 50 > height - 20) {
+        doc.addPage();
+        neighborhoodStartY = 16;
+        setupPageDecorations(doc, doc.getNumberOfPages());
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text('3. MONITORAMENTO DE COBERTURA E IMÓVEIS POR BAIRRO', 14, neighborhoodStartY);
+
+    const neighborhoodRows = analytics.neighborhoods.map(n => {
+        let status = 'Sem meta';
+        if (n.target > 0) {
+            if (n.coverage >= 80) status = 'Alta (≥80%)';
+            else if (n.coverage >= 60) status = 'Média (60-79%)';
+            else status = 'Inicial (<60%)';
+        } else if (n.visited > 0) {
+            status = 'Atendido';
+        }
+
+        return [
+            n.name,
+            n.target > 0 ? n.target.toLocaleString() : '-',
+            n.visited.toLocaleString(),
+            n.target > 0 ? `${n.coverage.toFixed(1)}%` : '-',
+            (n.propertyTypes?.R || 0).toLocaleString(),
+            (n.propertyTypes?.Comercio || 0).toLocaleString(),
+            (n.propertyTypes?.Tb || 0).toLocaleString(),
+            (n.propertyTypes?.PE || 0).toLocaleString(),
+            (n.propertyTypes?.O || 0).toLocaleString(),
+            status
+        ];
+    });
+
+    // Calculate neighborhood totals
+    const totalTarget = analytics.neighborhoods.reduce((acc, n) => acc + (n.target || 0), 0);
+    const totalVisited = analytics.neighborhoods.reduce((acc, n) => acc + (n.visited || 0), 0);
+    const totalR = analytics.neighborhoods.reduce((acc, n) => acc + (n.propertyTypes?.R || 0), 0);
+    const totalCom = analytics.neighborhoods.reduce((acc, n) => acc + (n.propertyTypes?.Comercio || 0), 0);
+    const totalTb = analytics.neighborhoods.reduce((acc, n) => acc + (n.propertyTypes?.Tb || 0), 0);
+    const totalPE = analytics.neighborhoods.reduce((acc, n) => acc + (n.propertyTypes?.PE || 0), 0);
+    const totalO = analytics.neighborhoods.reduce((acc, n) => acc + (n.propertyTypes?.O || 0), 0);
+    const overallCoverage = totalTarget > 0 ? `${((totalVisited / totalTarget) * 100).toFixed(1)}%` : '-';
+
+    const neighborhoodFooter = [
+        'TOTAL GERAL',
+        totalTarget > 0 ? totalTarget.toLocaleString() : '-',
+        totalVisited.toLocaleString(),
+        overallCoverage,
+        totalR.toLocaleString(),
+        totalCom.toLocaleString(),
+        totalTb.toLocaleString(),
+        totalPE.toLocaleString(),
+        totalO.toLocaleString(),
+        `${totalBairrosAtendidos} Bairros atendidos`
+    ];
+
+    autoTable(doc, {
+        startY: neighborhoodStartY + 3,
+        head: [['Bairro', 'Meta Estimada', 'Visitados (T)', 'Cobertura', 'Residencial (R)', 'Comercial (C)', 'Terreno (TB)', 'Ponto Estr. (PE)', 'Outros (O)', 'Situação Cobertura']],
+        body: neighborhoodRows,
+        foot: [neighborhoodFooter],
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        styles: { fontSize: 7.5, cellPadding: 2.2, textColor: [31, 41, 55], valign: 'middle' },
+        columnStyles: {
+            0: { cellWidth: 44, halign: 'left', fontStyle: 'bold' },
+            1: { cellWidth: 24, halign: 'center' },
+            2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+            3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+            4: { cellWidth: 24, halign: 'center' },
+            5: { cellWidth: 22, halign: 'center' },
+            6: { cellWidth: 22, halign: 'center' },
+            7: { cellWidth: 24, halign: 'center' },
+            8: { cellWidth: 20, halign: 'center' },
+            9: { cellWidth: 43, halign: 'center', fontStyle: 'bold' }
+        },
+        margin: { left: 14, right: 14, top: 16, bottom: 20 },
+        didDrawPage: function(data) {
+            setupPageDecorations(doc, data.pageNumber);
+            if (data.pageNumber > 1) {
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor(15, 23, 42);
+                doc.text('3. MONITORAMENTO DE BAIRROS (CONTINUAÇÃO)', 14, 11);
+            }
+        }
+    });
+
+    // Save PDF file
+    const safeActivityName = (filters.atividade && filters.atividade !== 'Todos')
+        ? `_${filters.atividade.replace(/[^\w]/g, '_')}`
+        : '';
+    const fileName = `Relatorio_Ranking_Produtividade_e_Bairros${safeActivityName}_${now.toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
 };

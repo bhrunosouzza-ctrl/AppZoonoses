@@ -247,7 +247,7 @@ const getHeaderIndices = (headerRow: string[]): Record<string, number> => {
     else if (norm === 'dep_elim' || norm === 'dep elim') indices['Dep_Elim'] = index;
     else if (norm === 'quart_c' || norm === 'quart c') indices['Quart_C'] = index;
     else if (norm === 'observacao' || norm === 'observacoes') indices['Observacao'] = index;
-    else if (norm === 'atividade') indices['Atividade'] = index;
+    else if (norm === 'atividade' || norm === 'atividades') indices['Atividade'] = index;
     else if (norm === 'pendencias') indices['Pendencias'] = index;
   });
   return indices;
@@ -426,7 +426,8 @@ export const calculateAnalytics = (data: ProductionData[], goals: GoalSettings):
     supervisors[d.Supervisor].Agentes.add(d.Agente);
 
     // Neighborhood Aggregation
-    if ((d.Atividade || '').toLowerCase() !== 'levantamento de índice') {
+    const hasOnlyLevantamento = data.length > 0 && data.every(item => (item.Atividade || '').toLowerCase().includes('levantamento'));
+    if (hasOnlyLevantamento || (d.Atividade || '').toLowerCase() !== 'levantamento de índice') {
         let bName = d.Bairro;
         const targetKey = Object.keys(NEIGHBORHOOD_TARGETS).find(k => k.toLowerCase() === bName.toLowerCase());
         

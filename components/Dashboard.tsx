@@ -6,13 +6,13 @@ import {
 import { 
   UploadCloud, BarChart2, Target, Briefcase, Droplet, 
   TrendingUp, Home, Users, AlertTriangle, ClipboardList, PieChart as PieIcon, MapPin, FileText,
-  Stethoscope, FileCheck, Clock, UserX, Activity, SlidersHorizontal, ArrowLeft, ChevronRight, CheckCircle, Info, Database, Sparkles, Smartphone, Monitor, ChevronUp, ChevronDown, ClipboardCheck
+  Stethoscope, FileCheck, Clock, UserX, Activity, SlidersHorizontal, ArrowLeft, ChevronRight, CheckCircle, Info, Database, Sparkles, Smartphone, Monitor, ChevronUp, ChevronDown, ClipboardCheck, Award, FileSpreadsheet
 } from 'lucide-react';
 import { ProductionData, FilterState, GoalSettings, HoursBankEntry } from '../types';
 import { processDataFile, calculateAnalytics, COLORS, processGoogleSheetsRows, fetchPublicGoogleSheet, fetchPublicGoogleSheetsAllData, fetchUserGoogleSheets, GoogleDriveSheetFile } from '../utils';
 import { KpiCard } from './KpiCard';
 import { GoalModal } from './GoalModal';
-import { generatePDFReport } from './ReportGenerator';
+import { generatePDFReport, generateProductivityAndNeighborhoodsPDFReport } from './ReportGenerator';
 import { AgentDetailsModal } from './AgentDetailsModal';
 import { HoursBankView } from './HoursBankView';
 import { LancamentoCampo } from './LancamentoCampo';
@@ -158,6 +158,8 @@ const generateDemoData = (): ProductionData[] => {
 
       // Random cycle and month
       const cycleIdx = i < 22 ? 0 : 1;
+      const demoActivities = ["Tratamento", "Levantamento de Índice", "Ponto Estratégico", "Bloqueio de Transmissão"];
+      const demoActivity = demoActivities[(i + agent.name.length) % demoActivities.length];
 
       demoList.push({
         Supervisor: agent.sup,
@@ -165,7 +167,7 @@ const generateDemoData = (): ProductionData[] => {
         Ciclo: cycles[cycleIdx],
         Mes: months[cycleIdx],
         Bairro: bairrosList[Math.floor(Math.random() * bairrosList.length)],
-        Atividade: "Tratamento Focal",
+        Atividade: demoActivity,
         DataISO: dateISO,
         Data: dateISO.split('-').reverse().join('/'),
         Total_T: totalT,
@@ -404,7 +406,8 @@ export const Dashboard: React.FC = () => {
         agente: 'Todos',
         ciclo: 'Todos',
         mes: 'Todos',
-        ano: 'Todos'
+        ano: 'Todos',
+        atividade: 'Todos'
     });
 
     const [localFilters, setLocalFilters] = useState<FilterState>({ ...filters });
@@ -444,7 +447,8 @@ export const Dashboard: React.FC = () => {
                    (filters.agente === 'Todos' || item.Agente === filters.agente) &&
                    (filters.ciclo === 'Todos' || item.Ciclo === filters.ciclo) &&
                    (filters.mes === 'Todos' || item.Mes === filters.mes) &&
-                   (filters.ano === 'Todos' || item.DataISO.startsWith(filters.ano));
+                   (filters.ano === 'Todos' || item.DataISO.startsWith(filters.ano)) &&
+                   (filters.atividade === 'Todos' || !filters.atividade || item.Atividade === filters.atividade);
         });
     }, [rawData, filters]);
 
@@ -460,17 +464,20 @@ export const Dashboard: React.FC = () => {
         }));
     };
 
-    // Data for the Agent Modal - filters by Year/Supervisor but IGNORES Month/Cycle to show full history
+    // Data for the Agent Modal - applies all active filters (Ano, Supervisor, Ciclo, Mês, Atividade)
     const selectedAgentData = useMemo(() => {
         if (!selectedAgent) return [];
         return rawData.filter(item => {
             const matchesAgent = item.Agente === selectedAgent;
             const matchesYear = filters.ano === 'Todos' || item.DataISO.startsWith(filters.ano);
             const matchesSupervisor = filters.supervisor === 'Todos' || item.Supervisor === filters.supervisor;
+            const matchesCiclo = filters.ciclo === 'Todos' || item.Ciclo === filters.ciclo;
+            const matchesMes = filters.mes === 'Todos' || item.Mes === filters.mes;
+            const matchesAtividade = filters.atividade === 'Todos' || !filters.atividade || item.Atividade === filters.atividade;
             
-            return matchesAgent && matchesYear && matchesSupervisor;
+            return matchesAgent && matchesYear && matchesSupervisor && matchesCiclo && matchesMes && matchesAtividade;
         });
-    }, [rawData, selectedAgent, filters.ano, filters.supervisor]);
+    }, [rawData, selectedAgent, filters]);
 
     const options = useMemo(() => {
         const getUnique = (key: string) => [...new Set(rawData.map(item => item[key]).filter(Boolean))];
@@ -480,6 +487,10 @@ export const Dashboard: React.FC = () => {
             'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
         ];
+
+        const uniqueActivities = getUnique('Atividade').filter((a: any) => a && a !== 'N/A' && a !== '0');
+        const fallbackActivities = ['Tratamento', 'Levantamento de Índice', 'Ponto Estratégico', 'Bloqueio de Transmissão', 'Outros'];
+        const finalActivities = uniqueActivities.length > 0 ? uniqueActivities.sort() : fallbackActivities;
 
         return {
             supervisores: getUnique('Supervisor').sort(),
@@ -492,7 +503,8 @@ export const Dashboard: React.FC = () => {
                 const weightB = idxB === -1 ? 999 : idxB;
                 return weightA - weightB;
             }),
-            anos: years
+            anos: years,
+            atividades: finalActivities
         };
     }, [rawData]);
 
@@ -515,8 +527,16 @@ export const Dashboard: React.FC = () => {
         ].filter(d => d.value > 0);
     }, [analytics]);
 
-    const handleExportPDF = () => {
+    const [showPdfOptionsModal, setShowPdfOptionsModal] = useState<boolean>(false);
+
+    const handleExportDetailedPDF = () => {
         generatePDFReport(analytics, pendenciasList, filters, filteredData);
+        setShowPdfOptionsModal(false);
+    };
+
+    const handleExportProductivityAndNeighborhoodsPDF = () => {
+        generateProductivityAndNeighborhoodsPDFReport(analytics, filters, filteredData, goals);
+        setShowPdfOptionsModal(false);
     };
 
     const handleApplyFilters = () => {
@@ -530,7 +550,8 @@ export const Dashboard: React.FC = () => {
             agente: 'Todos',
             ciclo: 'Todos',
             mes: 'Todos',
-            ano: 'Todos'
+            ano: 'Todos',
+            atividade: 'Todos'
         };
         setLocalFilters(reseted);
         setFilters(reseted);
@@ -1029,12 +1050,13 @@ export const Dashboard: React.FC = () => {
                             </button>
 
                             <button 
-                                onClick={handleExportPDF}
-                                className="p-2 bg-slate-800 border border-slate-700/60 rounded-lg text-emerald-400 hover:bg-slate-700 flex items-center gap-1"
-                                title="Relatório PDF"
+                                onClick={() => setShowPdfOptionsModal(true)}
+                                className="p-2 bg-slate-800 border border-slate-700/60 rounded-lg text-emerald-400 hover:bg-slate-700 flex items-center gap-1.5 transition-all shadow-sm"
+                                title="Opções de Relatório PDF"
                             >
                                 <FileText size={14} />
                                 <span className="hidden sm:inline text-xs font-semibold">Relatório PDF</span>
+                                <ChevronDown size={12} className="text-slate-400" />
                             </button>
 
                             {/* Google Auth in Header */}
@@ -1088,7 +1110,8 @@ export const Dashboard: React.FC = () => {
                                 agente: 'Ag',
                                 ciclo: 'Cicl',
                                 mes: 'Mês',
-                                ano: 'Ano'
+                                ano: 'Ano',
+                                atividade: 'Ativ'
                             }[key] || key;
                             return (
                                 <div key={key} className="flex items-center gap-1 bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded-full shrink-0">
@@ -1334,11 +1357,22 @@ export const Dashboard: React.FC = () => {
                     {/* --- TAB VIEW 3: NEIGHBORHOODS --- */}
                     {activeTab === 'neighborhoods' && (
                         <div className="space-y-4 animate-in fade-in duration-300">
-                            {/* Short legend */}
-                            <div className="flex justify-between items-center text-[10px] bg-slate-900 border border-slate-800 p-2.5 rounded-xl font-semibold">
-                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500"></span> ≥80%</span>
-                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span> 60-79%</span>
-                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-400"></span> &lt;60%</span>
+                            {/* Header action bar */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3 rounded-2xl">
+                                <div className="flex items-center gap-3.5 text-[10px] font-semibold flex-wrap">
+                                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Cobertura:</span>
+                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500"></span> ≥80% Concluído</span>
+                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span> 60-79% Em Andamento</span>
+                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400"></span> &lt;60% Inicial</span>
+                                </div>
+                                <button 
+                                    onClick={handleExportProductivityAndNeighborhoodsPDF}
+                                    className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto shadow-sm active:scale-95"
+                                    title="Baixar Relatório de Ranking & Bairros em PDF"
+                                >
+                                    <FileText size={13} />
+                                    <span>PDF Bairros & Ranking</span>
+                                </button>
                             </div>
 
                             <p className="text-[10px] text-slate-500 mt-1 italic font-medium">Toque nos bairros para ver o detalhamento de imóveis visitados.</p>
@@ -1424,6 +1458,22 @@ export const Dashboard: React.FC = () => {
                     {/* --- TAB VIEW 4: TEAMS --- */}
                     {activeTab === 'teams' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
+                            {/* Header action bar */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3 rounded-2xl">
+                                <div>
+                                    <h3 className="text-xs font-bold text-slate-200">Equipes & Ranking de Produtividade</h3>
+                                    <p className="text-[10px] text-slate-400">Desempenho por supervisor e classificação individual de metas</p>
+                                </div>
+                                <button 
+                                    onClick={handleExportProductivityAndNeighborhoodsPDF}
+                                    className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto shadow-sm active:scale-95"
+                                    title="Baixar Relatório de Ranking & Bairros em PDF"
+                                >
+                                    <Award size={13} />
+                                    <span>Baixar PDF Ranking & Bairros</span>
+                                </button>
+                            </div>
+
                             {/* Responsive 2-column layout for supervisor charts & lists */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 {/* Supervisor Productivity metrics list */}
@@ -1790,6 +1840,8 @@ export const Dashboard: React.FC = () => {
                 onClose={() => setSelectedAgent(null)} 
                 agentName={selectedAgent || ''} 
                 data={selectedAgentData}
+                filters={filters}
+                goals={goals}
             />
 
 
@@ -1896,6 +1948,24 @@ export const Dashboard: React.FC = () => {
                                 >
                                     <option value="Todos">Todos os Meses</option>
                                     {options.meses?.map((opt: string) => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Atividade de Campo Selector */}
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                    <Activity size={13} className="text-emerald-400" />
+                                    Atividade de Campo
+                                </label>
+                                <select 
+                                    className="w-full bg-slate-955 border border-slate-800 text-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all cursor-pointer bg-slate-950 font-medium text-xs"
+                                    value={localFilters.atividade}
+                                    onChange={(e) => setLocalFilters({...localFilters, atividade: e.target.value})}
+                                >
+                                    <option value="Todos">Todas as Atividades</option>
+                                    {options.atividades?.map((opt: string) => (
                                         <option key={opt} value={opt}>{opt}</option>
                                     ))}
                                 </select>
@@ -2042,6 +2112,99 @@ export const Dashboard: React.FC = () => {
                                 className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-6 rounded-2xl text-xs shadow-lg shadow-indigo-950/40"
                             >
                                 Concluído
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PDF Report Options Modal */}
+            {showPdfOptionsModal && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-4 bg-slate-950/80 border-b border-slate-800 flex justify-between items-center">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                    <FileText size={16} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xs font-bold text-slate-100 uppercase tracking-wider">Exportar Relatório PDF</h3>
+                                    <p className="text-[11px] text-slate-400">Selecione o modelo gerencial para download</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setShowPdfOptionsModal(false)}
+                                className="text-slate-400 hover:text-white font-bold text-xs bg-slate-800 hover:bg-slate-750 h-7 w-7 rounded-full flex items-center justify-center transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Body - Options */}
+                        <div className="p-6 space-y-3.5">
+                            {/* Option 1: Ranking & Bairros */}
+                            <div 
+                                onClick={handleExportProductivityAndNeighborhoodsPDF}
+                                className="group border border-emerald-500/30 hover:border-emerald-500/80 bg-emerald-950/15 hover:bg-emerald-950/35 p-4 rounded-2xl cursor-pointer transition-all flex items-start gap-3.5 shadow-sm"
+                            >
+                                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 group-hover:scale-105 transition-transform shrink-0 mt-0.5">
+                                    <Award size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                                            Ranking de Produtividade & Bairros
+                                        </h4>
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                            Novo
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                        Classificação de desempenho individual dos agentes e supervisores com metas, mais o monitoramento completo da cobertura e tipos de imóveis por bairro.
+                                    </p>
+                                    <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                                        <span>Baixar este Relatório</span>
+                                        <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Option 2: Produção Detalhada */}
+                            <div 
+                                onClick={handleExportDetailedPDF}
+                                className="group border border-slate-800 hover:border-indigo-500/80 bg-slate-850/60 hover:bg-slate-850 p-4 rounded-2xl cursor-pointer transition-all flex items-start gap-3.5 shadow-sm"
+                            >
+                                <div className="p-2.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 group-hover:scale-105 transition-transform shrink-0 mt-0.5">
+                                    <FileSpreadsheet size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
+                                        Relatório Detalhado de Produção
+                                    </h4>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                        Relatório completo com indicadores gerais, produção semanal por dia útil e listagem detalhada de registros de campo com pendências e faltas.
+                                    </p>
+                                    <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-indigo-400">
+                                        <span>Baixar este Relatório</span>
+                                        <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-3.5 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                            <span>
+                                {activeFiltersCount > 0 
+                                    ? `Aplicando ${activeFiltersCount} filtro(s) ativo(s)` 
+                                    : 'Aplicando a todos os dados'}
+                            </span>
+                            <button 
+                                onClick={() => setShowPdfOptionsModal(false)}
+                                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+                            >
+                                Cancelar
                             </button>
                         </div>
                     </div>

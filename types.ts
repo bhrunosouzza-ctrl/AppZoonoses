@@ -41,6 +41,7 @@ export interface GoalSettings {
     ciclo: string;
     mes: string;
     ano: string; // Added Year filter
+    atividade: string; // Added Atividade filter
   }
 
   export interface AttendanceMetrics {

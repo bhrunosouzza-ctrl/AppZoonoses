@@ -4,18 +4,20 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell 
 } from 'recharts';
-import { X, Briefcase, CheckCircle, XCircle, AlertCircle, Droplet, Home, Calendar, TrendingUp, Activity, UserX, Clock, FileCheck } from 'lucide-react';
-import { ProductionData } from '../types';
+import { X, Briefcase, CheckCircle, XCircle, AlertCircle, Droplet, Home, Calendar, TrendingUp, Activity, UserX, Clock, FileCheck, Filter } from 'lucide-react';
+import { ProductionData, FilterState, GoalSettings } from '../types';
 import { COLORS } from '../utils';
 
 interface AgentDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   agentName: string;
-  data: ProductionData[]; // This should be data filtered by Year, but containing all Cycles/Months
+  data: ProductionData[];
+  filters?: FilterState;
+  goals?: GoalSettings;
 }
 
-export const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({ isOpen, onClose, agentName, data }) => {
+export const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({ isOpen, onClose, agentName, data, filters, goals }) => {
   if (!isOpen) return null;
 
   // Aggregate data for the agent
@@ -114,6 +116,14 @@ export const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({ isOpen, on
     ? (analytics.totalTrabalhados / totalDays).toFixed(1) 
     : '0';
 
+  const hasActiveFilters = filters && (
+    filters.ano !== 'Todos' ||
+    filters.supervisor !== 'Todos' ||
+    filters.ciclo !== 'Todos' ||
+    filters.mes !== 'Todos' ||
+    (filters.atividade && filters.atividade !== 'Todos')
+  );
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-end sm:items-center justify-center z-50 animate-in fade-in duration-200 p-0 sm:p-4">
       {/* Click outside backdrop */}
@@ -125,193 +135,292 @@ export const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({ isOpen, on
         <div className="w-12 h-1 bg-slate-800 rounded-full mx-auto my-3 sm:hidden" onClick={onClose}></div>
 
         {/* Header */}
-        <div className="flex justify-between items-center p-5 sm:p-6 border-b border-slate-800/85 bg-slate-800/20 rounded-t-[30px] sm:rounded-t-2xl">
-          <div>
-            <h2 className="text-lg sm:text-2xl font-black text-white flex items-center gap-2">
-              {agentName}
-              <span className="text-[10px] sm:text-sm font-bold text-slate-400 px-2.5 py-0.5 bg-slate-800/80 rounded-full border border-slate-700">
-                Sup: {analytics.supervisor}
-              </span>
-            </h2>
-            <p className="text-slate-500 text-[10px] sm:text-sm mt-0.5">Relatório detalhado de rendimento</p>
+        <div className="p-5 sm:p-6 border-b border-slate-800/85 bg-slate-800/20 rounded-t-[30px] sm:rounded-t-2xl">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg sm:text-2xl font-black text-white">
+                  {agentName}
+                </h2>
+                <span className="text-[10px] sm:text-sm font-bold text-slate-400 px-2.5 py-0.5 bg-slate-800/80 rounded-full border border-slate-700">
+                  Sup: {analytics.supervisor}
+                </span>
+              </div>
+              <p className="text-slate-500 text-[10px] sm:text-xs mt-0.5">Relatório detalhado de rendimento individual</p>
+            </div>
+            <button onClick={onClose} className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-colors">
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-colors">
-            <X size={20} />
-          </button>
+
+          {/* Active Filters Pill Bar in Modal */}
+          {filters && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-800/60 text-[10px]">
+              <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1">
+                <Filter size={11} className="text-indigo-400" />
+                Filtros aplicados:
+              </span>
+              {filters.ano !== 'Todos' && (
+                <span className="px-2 py-0.5 rounded-full font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  Ano: {filters.ano}
+                </span>
+              )}
+              {filters.supervisor !== 'Todos' && (
+                <span className="px-2 py-0.5 rounded-full font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                  Sup: {filters.supervisor}
+                </span>
+              )}
+              {filters.ciclo !== 'Todos' && (
+                <span className="px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                  Ciclo: {filters.ciclo}
+                </span>
+              )}
+              {filters.mes !== 'Todos' && (
+                <span className="px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  Mês: {filters.mes}
+                </span>
+              )}
+              {filters.atividade && filters.atividade !== 'Todos' && (
+                <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  Atividade: {filters.atividade}
+                </span>
+              )}
+              {!hasActiveFilters && (
+                <span className="px-2 py-0.5 rounded-full font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                  Todo o Período / Geral
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar space-y-6">
-          
-          {/* KPI Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <Briefcase size={12} /> Total Visitas
-                </div>
-                <div className="text-lg font-bold text-blue-400">{analytics.totalTrabalhados.toLocaleString()}</div>
-             </div>
-             
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <Calendar size={12} /> Dias Ativos
-                </div>
-                <div className="text-lg font-bold text-slate-200">{totalDays}</div>
-             </div>
-
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <TrendingUp size={12} /> Média Diária
-                </div>
-                <div className="text-lg font-bold text-slate-200">{globalAverage}</div>
-             </div>
-
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <CheckCircle size={12} /> Eficiência
-                </div>
-                <div className="text-lg font-bold text-green-400">{efficiency}%</div>
-             </div>
-             
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <Home size={12} /> Fechados
-                </div>
-                <div className="text-lg font-bold text-yellow-400">{analytics.totalFechados.toLocaleString()}</div>
-             </div>
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <XCircle size={12} /> Recusas
-                </div>
-                <div className="text-lg font-bold text-red-400">{analytics.totalRecusas.toLocaleString()}</div>
-             </div>
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <AlertCircle size={12} /> Resgates
-                </div>
-                <div className="text-lg font-bold text-orange-400">{analytics.totalResgates.toLocaleString()}</div>
-             </div>
-             <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
-                    <Droplet size={12} /> Larvicida (g)
-                </div>
-                <div className="text-lg font-bold text-purple-400">{analytics.totalLarvicida.toFixed(1)}</div>
-             </div>
-          </div>
-
-          {/* HR / Pessoal Stats Row */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-             <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
-                 <Activity size={18} className="text-red-400"/> Histórico de Pessoal (RH)
-             </h3>
-             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                    <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><Activity size={12}/> Atestados</div>
-                    <div className="text-xl font-bold text-blue-400">{analytics.attendance.atestados}</div>
-                 </div>
-                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                    <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><FileCheck size={12}/> Declarações</div>
-                    <div className="text-xl font-bold text-teal-400">{analytics.attendance.declaracoes}</div>
-                 </div>
-                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                    <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><Activity size={12}/> Consultas</div>
-                    <div className="text-xl font-bold text-purple-400">{analytics.attendance.consultas}</div>
-                 </div>
-                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                    <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><Clock size={12}/> Compensações</div>
-                    <div className="text-xl font-bold text-orange-400">{analytics.attendance.compensacoes}</div>
-                 </div>
-                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
-                    <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><UserX size={12}/> Faltas Inj.</div>
-                    <div className="text-xl font-bold text-red-400">{analytics.attendance.faltas}</div>
-                 </div>
-             </div>
-          </div>
-
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Evolution Chart */}
-            <div className="lg:col-span-2 bg-slate-800/50 rounded-xl border border-slate-700 p-6 h-[400px]">
-                <h3 className="font-bold text-slate-200 mb-6">Evolução por Ciclo</h3>
-                <ResponsiveContainer width="100%" height="85%">
-                    <BarChart data={chartData} margin={{top: 5, right: 30, left: 20, bottom: 5}}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                        <XAxis dataKey="name" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                        <Tooltip 
-                            contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#f1f5f9'}} 
-                            cursor={{fill: '#1e293b'}} 
-                        />
-                        <Legend wrapperStyle={{paddingTop: '20px'}} />
-                        <Bar dataKey="Trabalhados" fill={COLORS.blue} name="Trabalhados" stackId="a" />
-                        <Bar dataKey="Fechados" fill={COLORS.yellow} name="Fechados" stackId="a" />
-                        <Bar dataKey="Recusas" fill={COLORS.red} name="Recusas" stackId="a" />
-                    </BarChart>
-                </ResponsiveContainer>
+          {data.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto">
+                <AlertCircle size={24} />
+              </div>
+              <h4 className="text-sm font-bold text-slate-200">Nenhum registro para os filtros selecionados</h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                O agente <strong>{agentName}</strong> não possui lançamentos com os filtros ativos no momento. Experimente ajustar o ano, ciclo, mês ou atividade no menu de filtros.
+              </p>
             </div>
+          ) : (
+            <>
+              {/* KPI Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <Briefcase size={12} /> Total Visitas
+                    </div>
+                    <div className="text-lg font-bold text-blue-400">{analytics.totalTrabalhados.toLocaleString()}</div>
+                 </div>
+                 
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <Calendar size={12} /> Dias Ativos
+                    </div>
+                    <div className="text-lg font-bold text-slate-200">{totalDays}</div>
+                 </div>
 
-            {/* Property Types */}
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6 h-[400px] flex flex-col">
-                <h3 className="font-bold text-slate-200 mb-2">Tipos de Imóveis</h3>
-                <div className="flex-1">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie 
-                                data={pieData} 
-                                cx="50%" cy="50%" 
-                                innerRadius={60} 
-                                outerRadius={80} 
-                                paddingAngle={5} 
-                                dataKey="value"
-                            >
-                                {pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={Object.values(COLORS)[index % Object.values(COLORS).length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#f1f5f9'}} />
-                            <Legend layout="vertical" verticalAlign="middle" align="right" />
-                        </PieChart>
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <TrendingUp size={12} /> Média Diária
+                    </div>
+                    <div className="text-lg font-bold text-slate-200">{globalAverage}</div>
+                 </div>
+
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <CheckCircle size={12} /> Eficiência
+                    </div>
+                    <div className="text-lg font-bold text-green-400">{efficiency}%</div>
+                 </div>
+                 
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <Home size={12} /> Fechados
+                    </div>
+                    <div className="text-lg font-bold text-yellow-400">{analytics.totalFechados.toLocaleString()}</div>
+                 </div>
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <XCircle size={12} /> Recusas
+                    </div>
+                    <div className="text-lg font-bold text-red-400">{analytics.totalRecusas.toLocaleString()}</div>
+                 </div>
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <AlertCircle size={12} /> Resgates
+                    </div>
+                    <div className="text-lg font-bold text-orange-400">{analytics.totalResgates.toLocaleString()}</div>
+                 </div>
+                 <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase mb-1">
+                        <Droplet size={12} /> Larvicida (g)
+                    </div>
+                    <div className="text-lg font-bold text-purple-400">{analytics.totalLarvicida.toFixed(1)}</div>
+                 </div>
+              </div>
+
+              {/* HR / Pessoal Stats Row */}
+              <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+                 <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                     <Activity size={18} className="text-red-400"/> Histórico de Pessoal (RH)
+                 </h3>
+                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><Activity size={12}/> Atestados</div>
+                        <div className="text-xl font-bold text-blue-400">{analytics.attendance.atestados}</div>
+                     </div>
+                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><FileCheck size={12}/> Declarações</div>
+                        <div className="text-xl font-bold text-teal-400">{analytics.attendance.declaracoes}</div>
+                     </div>
+                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><Activity size={12}/> Consultas</div>
+                        <div className="text-xl font-bold text-purple-400">{analytics.attendance.consultas}</div>
+                     </div>
+                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><Clock size={12}/> Compensações</div>
+                        <div className="text-xl font-bold text-orange-400">{analytics.attendance.compensacoes}</div>
+                     </div>
+                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-center">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex justify-center items-center gap-1"><UserX size={12}/> Faltas Inj.</div>
+                        <div className="text-xl font-bold text-red-400">{analytics.attendance.faltas}</div>
+                     </div>
+                 </div>
+              </div>
+
+              {/* Charts Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Evolution Chart */}
+                <div className="lg:col-span-2 bg-slate-800/50 rounded-xl border border-slate-700 p-6 h-[400px]">
+                    <h3 className="font-bold text-slate-200 mb-6">Evolução por Ciclo</h3>
+                    <ResponsiveContainer width="100%" height="85%">
+                        <BarChart data={chartData} margin={{top: 5, right: 30, left: 20, bottom: 5}}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                            <XAxis dataKey="name" tick={{fill: '#94a3b8', fontSize: 12}} axisLine={false} tickLine={false} />
+                            <YAxis tick={{fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                            <Tooltip 
+                                contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#f1f5f9'}} 
+                                cursor={{fill: '#1e293b'}} 
+                            />
+                            <Legend wrapperStyle={{paddingTop: '20px'}} />
+                            <Bar dataKey="Trabalhados" fill={COLORS.blue} name="Trabalhados" stackId="a" />
+                            <Bar dataKey="Fechados" fill={COLORS.yellow} name="Fechados" stackId="a" />
+                            <Bar dataKey="Recusas" fill={COLORS.red} name="Recusas" stackId="a" />
+                        </BarChart>
                     </ResponsiveContainer>
                 </div>
-            </div>
-          </div>
 
-          {/* Detailed Table */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
-             <div className="px-6 py-4 border-b border-slate-700 font-bold text-slate-200">
-                Detalhamento por Ciclo
-             </div>
-             <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left text-slate-400">
-                    <thead className="bg-slate-900/50 text-slate-500 uppercase text-xs">
-                        <tr>
-                            <th className="px-6 py-3">Ciclo</th>
-                            <th className="px-6 py-3 text-right">Trabalhados</th>
-                            <th className="px-6 py-3 text-right">Dias</th>
-                            <th className="px-6 py-3 text-right">Média/Dia</th>
-                            <th className="px-6 py-3 text-right">Fechados</th>
-                            <th className="px-6 py-3 text-right">Recusas</th>
-                            <th className="px-6 py-3 text-right">Resgates</th>
-                            <th className="px-6 py-3 text-right">Larvicida (g)</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700">
-                        {chartData.map((row: any) => (
-                            <tr key={row.name} className="hover:bg-slate-700/30">
-                                <td className="px-6 py-3 font-medium text-slate-200">{row.name}</td>
-                                <td className="px-6 py-3 text-right text-blue-400">{row.Trabalhados}</td>
-                                <td className="px-6 py-3 text-right text-slate-300">{row.diasCount}</td>
-                                <td className="px-6 py-3 text-right text-slate-300 font-bold">{row.mediaDiaria}</td>
-                                <td className="px-6 py-3 text-right text-yellow-400">{row.Fechados}</td>
-                                <td className="px-6 py-3 text-right text-red-400">{row.Recusas}</td>
-                                <td className="px-6 py-3 text-right text-orange-400">{row.Resgates}</td>
-                                <td className="px-6 py-3 text-right text-purple-400">{row.Larvicida.toFixed(1)}</td>
+                {/* Property Types */}
+                <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6 h-[400px] flex flex-col">
+                    <h3 className="font-bold text-slate-200 mb-2">Tipos de Imóveis</h3>
+                    <div className="flex-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie 
+                                    data={pieData} 
+                                    cx="50%" cy="50%" 
+                                    innerRadius={60} 
+                                    outerRadius={80} 
+                                    paddingAngle={5} 
+                                    dataKey="value"
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={Object.values(COLORS)[index % Object.values(COLORS).length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#f1f5f9'}} />
+                                <Legend layout="vertical" verticalAlign="middle" align="right" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+              </div>
+
+              {/* Detailed Table por Ciclo */}
+              <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                 <div className="px-6 py-4 border-b border-slate-700 font-bold text-slate-200">
+                    Detalhamento por Ciclo
+                 </div>
+                 <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left text-slate-400">
+                        <thead className="bg-slate-900/50 text-slate-500 uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-3">Ciclo</th>
+                                <th className="px-6 py-3 text-right">Trabalhados</th>
+                                <th className="px-6 py-3 text-right">Dias</th>
+                                <th className="px-6 py-3 text-right">Média/Dia</th>
+                                <th className="px-6 py-3 text-right">Fechados</th>
+                                <th className="px-6 py-3 text-right">Recusas</th>
+                                <th className="px-6 py-3 text-right">Resgates</th>
+                                <th className="px-6 py-3 text-right">Larvicida (g)</th>
                             </tr>
-                        ))}
-                    </tbody>
-                 </table>
-             </div>
-          </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700">
+                            {chartData.map((row: any) => (
+                                <tr key={row.name} className="hover:bg-slate-700/30">
+                                    <td className="px-6 py-3 font-medium text-slate-200">{row.name}</td>
+                                    <td className="px-6 py-3 text-right text-blue-400">{row.Trabalhados}</td>
+                                    <td className="px-6 py-3 text-right text-slate-300">{row.diasCount}</td>
+                                    <td className="px-6 py-3 text-right text-slate-300 font-bold">{row.mediaDiaria}</td>
+                                    <td className="px-6 py-3 text-right text-yellow-400">{row.Fechados}</td>
+                                    <td className="px-6 py-3 text-right text-red-400">{row.Recusas}</td>
+                                    <td className="px-6 py-3 text-right text-orange-400">{row.Resgates}</td>
+                                    <td className="px-6 py-3 text-right text-purple-400">{row.Larvicida.toFixed(1)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                     </table>
+                 </div>
+              </div>
+
+              {/* Lançamentos Diários de Campo (Filtrados) */}
+              <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                 <div className="px-6 py-4 border-b border-slate-700 font-bold text-slate-200 flex justify-between items-center flex-wrap gap-2">
+                    <span>Lançamentos de Campo do Período ({data.length} registro{data.length !== 1 ? 's' : ''})</span>
+                    <span className="text-[11px] font-normal text-slate-400">Ordenado por data decrescente</span>
+                 </div>
+                 <div className="overflow-x-auto max-h-72 custom-scrollbar">
+                     <table className="w-full text-xs text-left text-slate-400">
+                        <thead className="bg-slate-900/70 text-slate-500 uppercase text-[10px] sticky top-0">
+                            <tr>
+                                <th className="px-4 py-2.5">Data</th>
+                                <th className="px-4 py-2.5">Ciclo</th>
+                                <th className="px-4 py-2.5">Bairro</th>
+                                <th className="px-4 py-2.5">Atividade</th>
+                                <th className="px-4 py-2.5 text-right">Trabalhados</th>
+                                <th className="px-4 py-2.5 text-right">Fechados</th>
+                                <th className="px-4 py-2.5 text-right">Recusas</th>
+                                <th className="px-4 py-2.5 text-right">Resgates</th>
+                                <th className="px-4 py-2.5 text-right">Larvicida (g)</th>
+                                <th className="px-4 py-2.5">Pendências</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/60">
+                            {data.slice().sort((a, b) => b.DataISO.localeCompare(a.DataISO)).map((row, rIdx) => (
+                                <tr key={rIdx} className="hover:bg-slate-700/30">
+                                    <td className="px-4 py-2.5 font-medium text-slate-200 whitespace-nowrap">{row.Data || row.DataISO}</td>
+                                    <td className="px-4 py-2.5 text-slate-300">{row.Ciclo}</td>
+                                    <td className="px-4 py-2.5 text-slate-300 max-w-[130px] truncate">{row.Bairro}</td>
+                                    <td className="px-4 py-2.5 text-emerald-400 max-w-[140px] truncate">{row.Atividade || '-'}</td>
+                                    <td className="px-4 py-2.5 text-right font-bold text-blue-400">{row.Total_T}</td>
+                                    <td className="px-4 py-2.5 text-right text-yellow-400">{row.Fechado}</td>
+                                    <td className="px-4 py-2.5 text-right text-red-400">{row.Recusa}</td>
+                                    <td className="px-4 py-2.5 text-right text-orange-400">{row.Resgate}</td>
+                                    <td className="px-4 py-2.5 text-right text-purple-400">{row.Larvicida ? row.Larvicida.toFixed(1) : '0'}</td>
+                                    <td className="px-4 py-2.5 text-slate-400 max-w-[160px] truncate" title={row.Pendencias}>{row.Pendencias || '-'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                     </table>
+                 </div>
+              </div>
+            </>
+          )}
 
         </div>
       </div>

@@ -1,6 +1,8 @@
 {
   "name": "Remix: Copy of ProdAnalise",
-  "description": "Analise de dados",
+  "description": "Painel de análise de produção e rendimento de agentes de campo com filtros por ciclo, mês, supervisor, ano e atividade",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
