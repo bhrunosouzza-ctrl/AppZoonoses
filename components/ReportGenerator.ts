@@ -530,7 +530,7 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
         totalRecusasRank.toLocaleString(),
         totalResgatesRank.toLocaleString(),
         totalImTratRank.toLocaleString(),
-        `${agentsMetGoalCount}/${analytics.rankingAgentes.length} atingiram meta (≥80%)`
+        `${agentsMetGoalCount}/${analytics.rankingAgentes.length} atingiram meta (>= 80%)`
     ];
 
     autoTable(doc, {
@@ -643,9 +643,9 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
     const neighborhoodRows = analytics.neighborhoods.map(n => {
         let status = 'Sem meta';
         if (n.target > 0) {
-            if (n.coverage >= 80) status = 'Alta (≥80%)';
+            if (n.coverage >= 80) status = 'Alta (>= 80%)';
             else if (n.coverage >= 60) status = 'Média (60-79%)';
-            else status = 'Inicial (<60%)';
+            else status = 'Baixa (< 60%)';
         } else if (n.visited > 0) {
             status = 'Atendido';
         }
@@ -708,6 +708,27 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
             7: { cellWidth: 24, halign: 'center' },
             8: { cellWidth: 20, halign: 'center' },
             9: { cellWidth: 43, halign: 'center', fontStyle: 'bold' }
+        },
+        didParseCell: function(data) {
+            if (data.column.index === 9) {
+                data.cell.styles.halign = 'center';
+                if (data.section === 'body') {
+                    const cellText = String(data.cell.raw || '');
+                    if (cellText.startsWith('Alta')) {
+                        data.cell.styles.textColor = [22, 101, 52];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (cellText.startsWith('Média')) {
+                        data.cell.styles.textColor = [194, 65, 12];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (cellText.startsWith('Baixa')) {
+                        data.cell.styles.textColor = [185, 28, 28];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (cellText.startsWith('Atendido')) {
+                        data.cell.styles.textColor = [3, 105, 161];
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
+            }
         },
         margin: { left: 14, right: 14, top: 16, bottom: 20 },
         didDrawPage: function(data) {

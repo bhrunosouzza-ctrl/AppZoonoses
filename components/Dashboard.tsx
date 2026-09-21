@@ -1363,7 +1363,7 @@ export const Dashboard: React.FC = () => {
                                     <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Cobertura:</span>
                                     <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500"></span> ≥80% Concluído</span>
                                     <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span> 60-79% Em Andamento</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400"></span> &lt;60% Inicial</span>
+                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400"></span> &lt;60% Baixa</span>
                                 </div>
                                 <button 
                                     onClick={handleExportProductivityAndNeighborhoodsPDF}
