@@ -488,8 +488,11 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
     doc.text('1. RANKING DE PRODUTIVIDADE DOS AGENTES DE CAMPO', 14, 66);
 
     const agentRankingRows = analytics.rankingAgentes.map((agent, idx) => {
-        const percMeta = goals.trabalhados > 0 ? ((agent.Trabalhados / goals.trabalhados) * 100).toFixed(0) : '0';
-        const metaStatus = agent.StatusMeta ? `Sim (${percMeta}%)` : `Não (${percMeta}%)`;
+        const percRatio = goals.trabalhados > 0 ? (agent.Trabalhados / goals.trabalhados) : 0;
+        const percMeta = Math.round(percRatio * 100);
+        // Meta atingida: Sim para 80% acima (>= 80%)
+        const atingiuMeta = percRatio >= 0.8;
+        const metaStatus = atingiuMeta ? `Sim (${percMeta}%)` : `Não (${percMeta}%)`;
         
         return [
             `#${idx + 1}`,
@@ -511,7 +514,10 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
     const totalRecusasRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Recusas || 0), 0);
     const totalResgatesRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Resgates || 0), 0);
     const totalImTratRank = analytics.rankingAgentes.reduce((acc, a) => acc + (a.Im_Trat || 0), 0);
-    const agentsMetGoalCount = analytics.rankingAgentes.filter(a => a.StatusMeta).length;
+    const agentsMetGoalCount = analytics.rankingAgentes.filter(a => {
+        const ratio = goals.trabalhados > 0 ? (a.Trabalhados / goals.trabalhados) : 0;
+        return ratio >= 0.8;
+    }).length;
 
     const agentFooterRow = [
         'TOTAL',
@@ -524,7 +530,7 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
         totalRecusasRank.toLocaleString(),
         totalResgatesRank.toLocaleString(),
         totalImTratRank.toLocaleString(),
-        `${agentsMetGoalCount}/${analytics.rankingAgentes.length} atingiram meta`
+        `${agentsMetGoalCount}/${analytics.rankingAgentes.length} atingiram meta (≥80%)`
     ];
 
     autoTable(doc, {
@@ -532,6 +538,7 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
         head: [['Pos', 'Agente de Campo', 'Supervisor', 'Trabalhados (T)', 'Média/Dia', 'Dias', 'Fechados', 'Recusas', 'Resgates', 'Tratados', 'Meta Atingida']],
         body: agentRankingRows,
         foot: [agentFooterRow],
+        showFoot: 'lastPage',
         theme: 'striped',
         headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
         footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 8, halign: 'center' },
@@ -548,6 +555,17 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
             8: { cellWidth: 20, halign: 'center' },
             9: { cellWidth: 20, halign: 'center' },
             10: { cellWidth: 33, halign: 'center', fontStyle: 'bold' }
+        },
+        didParseCell: function(data) {
+            if (data.section === 'body' && data.column.index === 10) {
+                const cellText = String(data.cell.raw || '');
+                if (cellText.startsWith('Sim')) {
+                    data.cell.styles.textColor = [22, 101, 52];
+                    data.cell.styles.fontStyle = 'bold';
+                } else if (cellText.startsWith('Não')) {
+                    data.cell.styles.textColor = [185, 28, 28];
+                }
+            }
         },
         margin: { left: 14, right: 14, top: 16, bottom: 20 },
         didDrawPage: function(data) {
@@ -674,6 +692,7 @@ export const generateProductivityAndNeighborhoodsPDFReport = (
         head: [['Bairro', 'Meta Estimada', 'Visitados (T)', 'Cobertura', 'Residencial (R)', 'Comercial (C)', 'Terreno (TB)', 'Ponto Estr. (PE)', 'Outros (O)', 'Situação Cobertura']],
         body: neighborhoodRows,
         foot: [neighborhoodFooter],
+        showFoot: 'lastPage',
         theme: 'striped',
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
         footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 8, halign: 'center' },
